@@ -4,7 +4,7 @@ locals {
   default_web_cidrs = toset(["10.1.2.0/24", "10.1.3.0/24"])
   default_app_cidrs = toset(["10.1.4.0/24", "10.1.5.0/24"])
   default_db_cidrs  = toset(["10.1.6.0/24", "10.1.7.0/24"])
-
+  route_tables      = ["pub", "priv"]
 }
 
 resource "aws_vpc" "web_app" {
