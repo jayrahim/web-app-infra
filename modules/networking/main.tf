@@ -1,10 +1,11 @@
 locals {
-  az_names          = data.aws_availability_zones.azs.names
-  default_pub_cidrs = toset(["10.1.0.0/24", "10.1.1.0/24"])
-  default_web_cidrs = toset(["10.1.2.0/24", "10.1.3.0/24"])
-  default_app_cidrs = toset(["10.1.4.0/24", "10.1.5.0/24"])
-  default_db_cidrs  = toset(["10.1.6.0/24", "10.1.7.0/24"])
-  route_tables      = ["pub", "priv"]
+  az_names             = data.aws_availability_zones.azs.names
+  default_public_cidrs = toset(["10.1.0.0/24", "10.1.1.0/24"])
+  default_web_cidrs    = toset(["10.1.2.0/24", "10.1.3.0/24"])
+  default_app_cidrs    = toset(["10.1.4.0/24", "10.1.5.0/24"])
+  default_db_cidrs     = toset(["10.1.6.0/24", "10.1.7.0/24"])
+  route_tables         = ["pub", "priv"]
+
 }
 
 resource "aws_vpc" "web_app" {
@@ -12,23 +13,34 @@ resource "aws_vpc" "web_app" {
   enable_dns_support                   = var.enable_dns_support
   enable_dns_hostnames                 = var.enable_dns_hostnames
   enable_network_address_usage_metrics = var.enable_network_address_usage_metrics
+  tags = {
+    Name = "web-app-infra-vpc"
+  }
 }
 
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.web_app.id
+  tags = {
+    Name = "web-app-infra-igw"
+  }
 }
 
 resource "aws_eip" "nat_gw_ip" {
-  count      = length(var.public_cidrs) > 0 ? length(var.public_cidrs) : length(local.default_pub_cidrs)
-  depends_on = [aws_internet_gateway.igw]
-  domain     = "vpc"
+  count  = length(var.public_cidrs) > 0 ? length(var.public_cidrs) : length(local.default_public_cidrs)
+  domain = "vpc"
+  tags = {
+    Name = "web-app-infra-eip-${count.index}"
+  }
 }
 
 resource "aws_subnet" "public" {
-  count             = length(var.public_cidrs) > 0 ? length(var.public_cidrs) : length(local.default_pub_cidrs)
+  count             = length(var.public_cidrs) > 0 ? length(var.public_cidrs) : length(local.default_public_cidrs)
   vpc_id            = aws_vpc.web_app.id
   availability_zone = local.az_names[count.index]
-  cidr_block        = length(var.public_cidrs) > 0 ? tolist(var.public_cidrs)[count.index] : tolist(local.default_pub_cidrs)[count.index]
+  cidr_block        = length(var.public_cidrs) > 0 ? tolist(var.public_cidrs)[count.index] : tolist(local.default_public_cidrs)[count.index]
+  tags = {
+    Name = "web-app-infra-pub-sub-${local.az_names[count.index]}"
+  }
 }
 
 resource "aws_subnet" "web" {
@@ -36,6 +48,9 @@ resource "aws_subnet" "web" {
   vpc_id            = aws_vpc.web_app.id
   availability_zone = local.az_names[count.index]
   cidr_block        = length(var.web_cidrs) > 0 ? tolist(var.web_cidrs)[count.index] : tolist(local.default_web_cidrs)[count.index]
+  tags = {
+    Name = "web-app-infra-web-sub-${local.az_names[count.index]}"
+  }
 }
 
 resource "aws_subnet" "app" {
@@ -43,6 +58,9 @@ resource "aws_subnet" "app" {
   vpc_id            = aws_vpc.web_app.id
   availability_zone = local.az_names[count.index]
   cidr_block        = length(var.app_cidrs) > 0 ? tolist(var.app_cidrs)[count.index] : tolist(local.default_app_cidrs)[count.index]
+  tags = {
+    Name = "web-app-infra-app-sub-${local.az_names[count.index]}"
+  }
 }
 
 resource "aws_subnet" "db" {
@@ -50,6 +68,9 @@ resource "aws_subnet" "db" {
   vpc_id            = aws_vpc.web_app.id
   availability_zone = local.az_names[count.index]
   cidr_block        = length(var.app_cidrs) > 0 ? tolist(var.db_cidrs)[count.index] : tolist(local.default_db_cidrs)[count.index]
+  tags = {
+    Name = "web-app-infra-db-sub-${local.az_names[count.index]}"
+  }
 }
 
 resource "aws_nat_gateway" "nat_gw" {
@@ -58,4 +79,7 @@ resource "aws_nat_gateway" "nat_gw" {
   connectivity_type = "public"
   allocation_id     = aws_eip.nat_gw_ip.*.id[count.index]
   subnet_id         = aws_subnet.public.*.id[count.index]
+  tags = {
+    Name = "web-app-infra-nat-gw-${count.index}"
+  }
 }
