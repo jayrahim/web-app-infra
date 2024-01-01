@@ -83,3 +83,54 @@ resource "aws_nat_gateway" "nat_gw" {
     Name = "web-app-infra-nat-gw-${count.index}"
   }
 }
+
+resource "aws_route_table" "route_tables" {
+  count  = length(local.route_tables)
+  vpc_id = aws_vpc.web_app.id
+  tags = {
+    Name = "web-app-infra-${local.route_tables[count.index]}-rt"
+  }
+}
+
+resource "aws_route" "public_rt_default_route" {
+  route_table_id         = aws_route_table.route_tables.0.id
+  depends_on             = [aws_route_table.route_tables]
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.igw.id
+}
+
+resource "aws_route" "private_rt_default_route" {
+  route_table_id         = aws_route_table.route_tables.1.id
+  depends_on             = [aws_route_table.route_tables]
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_nat_gateway.nat_gw.0.id
+}
+
+resource "aws_route_table_association" "public_rt_public_subnet_0" {
+  route_table_id = aws_route_table.route_tables.0.id
+  subnet_id      = aws_subnet.public.0.id
+}
+
+resource "aws_route_table_association" "public_rt_public_subnet_1" {
+  route_table_id = aws_route_table.route_tables.0.id
+  subnet_id      = aws_subnet.public.1.id
+}
+
+resource "aws_route_table_association" "public_rt_web_subnet_0" {
+  route_table_id = aws_route_table.route_tables.0.id
+  subnet_id      = aws_subnet.web.0.id
+}
+
+resource "aws_route_table_association" "public_rt_web_subnet_1" {
+  route_table_id = aws_route_table.route_tables.0.id
+  subnet_id      = aws_subnet.web.1.id
+}
+resource "aws_route_table_association" "private_rt_app_subnet_0" {
+  route_table_id = aws_route_table.route_tables.1.id
+  subnet_id      = aws_subnet.app.0.id
+}
+
+resource "aws_route_table_association" "private_rt_app_subnet_1" {
+  route_table_id = aws_route_table.route_tables.1.id
+  subnet_id      = aws_subnet.app.1.id
+}
