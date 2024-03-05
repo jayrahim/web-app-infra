@@ -4,8 +4,8 @@ provider "aws" {
 
   default_tags {
     tags = {
-      environment = "dev"
-      project     = "web-app-infra"
+      environment = "lab"
+      project     = "web-app-infra-architecture"
       application = "demo-app"
       repository  = "jayrahim/web-app-infra"
     }
