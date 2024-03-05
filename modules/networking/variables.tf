@@ -42,3 +42,15 @@ variable "db_cidrs" {
   description = "The set of CIDRs for the public subnets"
   default     = []
 }
+
+variable "cache_cidrs" {
+  type        = set(string)
+  description = "The set of CIDRs for the cache subnets"
+  default     = []
+}
+
+variable "project_name" {
+  type        = string
+  description = "The name of the project"
+  default     = "web-app-infra"
+}

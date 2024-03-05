@@ -1,6 +1,11 @@
-module github.com/jayrahim
+module githubm.com/jayrahim/web-app-infra
 
 go 1.21.5
+
+require (
+	github.com/gruntwork-io/terratest v0.46.11
+	github.com/stretchr/testify v1.9.0
+)
 
 require (
 	cloud.google.com/go v0.110.0 // indirect
@@ -24,7 +29,6 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
 	github.com/googleapis/gax-go/v2 v2.7.1 // indirect
 	github.com/gruntwork-io/go-commons v0.8.0 // indirect
-	github.com/gruntwork-io/terratest v0.46.8 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-getter v1.7.1 // indirect
@@ -43,7 +47,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/pquerna/otp v1.2.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/stretchr/testify v1.8.2 // indirect
 	github.com/tmccombs/hcl2json v0.3.3 // indirect
 	github.com/ulikunitz/xz v0.5.10 // indirect
 	github.com/urfave/cli v1.22.2 // indirect

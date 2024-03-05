@@ -1,11 +1,12 @@
 locals {
   az_names             = data.aws_availability_zones.azs.names
-  default_public_cidrs = toset(["10.1.0.0/24", "10.1.1.0/24"])
-  default_web_cidrs    = toset(["10.1.2.0/24", "10.1.3.0/24"])
-  default_app_cidrs    = toset(["10.1.4.0/24", "10.1.5.0/24"])
-  default_db_cidrs     = toset(["10.1.6.0/24", "10.1.7.0/24"])
-  route_tables         = ["pub", "priv"]
-
+  default_public_cidrs = toset(["10.0.0.0/20", "10.0.16.0/20"])
+  default_web_cidrs    = toset(["10.0.32.0/20", "10.0.48.0/20"])
+  default_app_cidrs    = toset(["10.0.64.0/20", "10.0.80.0/20"])
+  default_db_cidrs     = toset(["10.0.96.0/20", "10.0.112.0/20"])
+  default_cache_cidrs  = toset(["10.0.128.0/20", "10.0.144.0/20"])
+  route_table_names    = ["public", "private"]
+  gateways             = [aws_internet_gateway.igw.id, aws_nat_gateway.nat_gw.0.id]
 }
 
 resource "aws_vpc" "web_app" {
@@ -14,14 +15,14 @@ resource "aws_vpc" "web_app" {
   enable_dns_hostnames                 = var.enable_dns_hostnames
   enable_network_address_usage_metrics = var.enable_network_address_usage_metrics
   tags = {
-    Name = "web-app-infra-vpc"
+    Name = "${var.project_name}-vpc"
   }
 }
 
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.web_app.id
   tags = {
-    Name = "web-app-infra-igw"
+    Name = "${var.project_name}-igw"
   }
 }
 
@@ -29,7 +30,7 @@ resource "aws_eip" "nat_gw_ip" {
   count  = length(var.public_cidrs) > 0 ? length(var.public_cidrs) : length(local.default_public_cidrs)
   domain = "vpc"
   tags = {
-    Name = "web-app-infra-eip-${count.index}"
+    Name = "${var.project_name}-eip-${count.index}"
   }
 }
 
@@ -39,7 +40,7 @@ resource "aws_subnet" "public" {
   availability_zone = local.az_names[count.index]
   cidr_block        = length(var.public_cidrs) > 0 ? tolist(var.public_cidrs)[count.index] : tolist(local.default_public_cidrs)[count.index]
   tags = {
-    Name = "web-app-infra-pub-sub-${local.az_names[count.index]}"
+    Name = "${var.project_name}-pub-sub-${local.az_names[count.index]}"
   }
 }
 
@@ -49,7 +50,7 @@ resource "aws_subnet" "web" {
   availability_zone = local.az_names[count.index]
   cidr_block        = length(var.web_cidrs) > 0 ? tolist(var.web_cidrs)[count.index] : tolist(local.default_web_cidrs)[count.index]
   tags = {
-    Name = "web-app-infra-web-sub-${local.az_names[count.index]}"
+    Name = "${var.project_name}-web-sub-${local.az_names[count.index]}"
   }
 }
 
@@ -59,7 +60,7 @@ resource "aws_subnet" "app" {
   availability_zone = local.az_names[count.index]
   cidr_block        = length(var.app_cidrs) > 0 ? tolist(var.app_cidrs)[count.index] : tolist(local.default_app_cidrs)[count.index]
   tags = {
-    Name = "web-app-infra-app-sub-${local.az_names[count.index]}"
+    Name = "${var.project_name}-app-sub-${local.az_names[count.index]}"
   }
 }
 
@@ -67,9 +68,19 @@ resource "aws_subnet" "db" {
   count             = length(var.db_cidrs) > 0 ? length(var.db_cidrs) : length(local.default_db_cidrs)
   vpc_id            = aws_vpc.web_app.id
   availability_zone = local.az_names[count.index]
-  cidr_block        = length(var.app_cidrs) > 0 ? tolist(var.db_cidrs)[count.index] : tolist(local.default_db_cidrs)[count.index]
+  cidr_block        = length(var.db_cidrs) > 0 ? tolist(var.db_cidrs)[count.index] : tolist(local.default_db_cidrs)[count.index]
   tags = {
-    Name = "web-app-infra-db-sub-${local.az_names[count.index]}"
+    Name = "${var.project_name}-db-sub-${local.az_names[count.index]}"
+  }
+}
+
+resource "aws_subnet" "cache" {
+  count             = length(var.cache_cidrs) > 0 ? length(var.cache_cidrs) : length(local.default_cache_cidrs)
+  vpc_id            = aws_vpc.web_app.id
+  availability_zone = local.az_names[count.index]
+  cidr_block        = length(var.cache_cidrs) > 0 ? tolist(var.cache_cidrs)[count.index] : tolist(local.default_cache_cidrs)[count.index]
+  tags = {
+    Name = "${var.project_name}-cache-sub-${local.az_names[count.index]}"
   }
 }
 
@@ -80,57 +91,54 @@ resource "aws_nat_gateway" "nat_gw" {
   allocation_id     = aws_eip.nat_gw_ip.*.id[count.index]
   subnet_id         = aws_subnet.public.*.id[count.index]
   tags = {
-    Name = "web-app-infra-nat-gw-${count.index}"
+    Name = "${var.project_name}-nat-gw-${count.index}"
   }
 }
 
 resource "aws_route_table" "route_tables" {
-  count  = length(local.route_tables)
+  count  = length(local.route_table_names)
   vpc_id = aws_vpc.web_app.id
   tags = {
-    Name = "web-app-infra-${local.route_tables[count.index]}-rt"
+    Name = "${var.project_name}-${local.route_table_names[count.index]}-rtb"
   }
 }
 
-resource "aws_route" "public_rt_default_route" {
-  route_table_id         = aws_route_table.route_tables.0.id
+resource "aws_route" "default_routes" {
+  count                  = length(local.route_table_names)
+  route_table_id         = aws_route_table.route_tables[count.index].id
   depends_on             = [aws_route_table.route_tables]
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.igw.id
+  gateway_id             = local.gateways[count.index]
 }
 
-resource "aws_route" "private_rt_default_route" {
-  route_table_id         = aws_route_table.route_tables.1.id
-  depends_on             = [aws_route_table.route_tables]
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_nat_gateway.nat_gw.0.id
+resource "aws_route_table_association" "public_rtb_public_subnets" {
+  count          = length(local.route_table_names)
+  route_table_id = aws_route_table.route_tables[count.index].id
+  subnet_id      = aws_subnet.public[count.index].id
 }
 
-resource "aws_route_table_association" "public_rt_public_subnet_0" {
-  route_table_id = aws_route_table.route_tables.0.id
-  subnet_id      = aws_subnet.public.0.id
+
+resource "aws_route_table_association" "public_rtb_web_subnets" {
+  count          = length(local.route_table_names)
+  route_table_id = aws_route_table.route_tables[count.index].id
+  subnet_id      = aws_subnet.web[count.index].id
 }
 
-resource "aws_route_table_association" "public_rt_public_subnet_1" {
-  route_table_id = aws_route_table.route_tables.0.id
-  subnet_id      = aws_subnet.public.1.id
+
+resource "aws_route_table_association" "private_rtb_app_subnets" {
+  count          = length(local.route_table_names)
+  route_table_id = aws_route_table.route_tables[count.index].id
+  subnet_id      = aws_subnet.app[count.index].id
 }
 
-resource "aws_route_table_association" "public_rt_web_subnet_0" {
-  route_table_id = aws_route_table.route_tables.0.id
-  subnet_id      = aws_subnet.web.0.id
+resource "aws_route_table_association" "private_rtb_db_subnets" {
+  count          = length(local.route_table_names)
+  route_table_id = aws_route_table.route_tables[count.index].id
+  subnet_id      = aws_subnet.db[count.index].id
 }
 
-resource "aws_route_table_association" "public_rt_web_subnet_1" {
-  route_table_id = aws_route_table.route_tables.0.id
-  subnet_id      = aws_subnet.web.1.id
-}
-resource "aws_route_table_association" "private_rt_app_subnet_0" {
-  route_table_id = aws_route_table.route_tables.1.id
-  subnet_id      = aws_subnet.app.0.id
-}
-
-resource "aws_route_table_association" "private_rt_app_subnet_1" {
-  route_table_id = aws_route_table.route_tables.1.id
-  subnet_id      = aws_subnet.app.1.id
+resource "aws_route_table_association" "private_rtb_cache_subnets" {
+  count          = length(local.route_table_names)
+  route_table_id = aws_route_table.route_tables[count.index].id
+  subnet_id      = aws_subnet.cache[count.index].id
 }
